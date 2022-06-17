@@ -1,4 +1,5 @@
 import { app, prisma } from '../app';
+import { json_req } from '../middleware';
 import express from 'express';
 import * as auth from '../auth';
 
@@ -6,57 +7,81 @@ const router = express.Router();
 
 router.get('/id/:id', async (req, res) => {
    const id = Math.abs(parseInt(req.params.id, 10));
+   if(isNaN(id)) {
+      res.sendStatus(400);
+      return
+   }
 
-   const user = await prisma.user.findUnique({
-      select: {
-         pwdhash: false,
-         salt: false,
-         email: false
-      },
-      where: {
-         id: id
-      },
-   });
-   res.json(user);
+   try {
+      const user = await prisma.user.findUnique({
+         select: {
+            pwdhash: false,
+            salt: false,
+            email: false
+         },
+         where: {
+            id
+         },
+      });
+      res.json(user);
+   } catch (e) {
+      console.log('db err')
+      res.sendStatus(400)
+      return
+   }
 });
 
-router.post('/auth', async (req, res) => {
-   if(!req.body.email || !req.body.pwd) throw new Error('email or password not provided');
+router.post('/auth', json_req(['title', 'body']),  async (req, res) => {
    const email = req.body.email;
 
-   const user = await prisma.user.findUnique({
-      where: {
-         email: email
-      }
-   });
+   let user;
+   try {
+      user = await prisma.user.findUnique({
+         where: {
+            email
+         }
+      });
+   } catch (e) {
+      console.log('db err')
+      res.sendStatus(400)
+      return;
+   }
 
    if (user) {
       const pwdhash = await auth.pwdHash(req.body.pwd, user.salt);
-      if(user.pwdhash == pwdhash) res.send(auth.genToken(user.email));
-      return;
-   }
-   res.status(401);
+      console.log('authing', pwdhash, user.pwdhash);
+      if(user.pwdhash === pwdhash) {
+         console.log('authing2')
+         res.json( {"token": auth.genToken(user.email)} );
+         return;
+      } else res.sendStatus(401);
+   } else res.sendStatus(401);
+   return;
 });
 
-router.post('/register', async (req, res) => {
-   if(req.body.register_secret != process.env.REGISTER_SECRET) { 
-      res.send(401);
+router.post('/register', json_req(['email', 'register_secret', 'pwd', 'username']), async (req, res) => {
+   if(req.body.register_secret !== process.env.REGISTER_SECRET) {
+      res.sendStatus(401);
       return;
    }
-   if(!req.body.email || !req.body.pwd) throw new Error('email or password not provided');
 
    const email = req.body.email;
-   const auth_info = await auth.genAuth(req.body.pwd);
+   const authInfo = await auth.genAuth(req.body.pwd);
 
+   const existing = await prisma.user.findMany({ where: { email } })
+   if (existing.length !== 0) {
+      res.sendStatus(403);
+      return;
+   }
    const user = await prisma.user.create({
       data: {
          username: req.body.username,
-         email: email,
-         pwdhash: await auth_info.pwd_hash,
-         salt: auth_info.salt
+         email,
+         pwdhash: await authInfo.pwdHashed,
+         salt: authInfo.salt
       }
    });
-   res.send(auth.genToken(user.email));
+   res.send( {"token":auth.genToken(user.email)} );
 });
 
 export default router;

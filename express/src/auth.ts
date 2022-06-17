@@ -1,16 +1,22 @@
+import { prisma } from './app';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
+import passport from 'passport';
+import LocalStrategy from 'passport-local';
+import crypto from 'crypto';
 
 function genToken(email:string) {
-   return jwt.sign(email, process.env.JWT_SECRET as string, { expiresIn: `${60 * 60 * 24}s` });
+   return jwt.sign({"email": email}, process.env.JWT_SECRET as string, { expiresIn: '2d' });
 }
 
-function verifyToken(req:any, res:any, next:any) {
-   const token_header = req.headers['authorization'];
-   const token = token_header && token_header.split(' ')[1];
+async function verifyToken(req:any, res:any, next:any) {
+   const tokenHeader = req.headers.authorization;
+   const token = tokenHeader && tokenHeader.split(' ')[1];
+
+   const json = req.body;
 
    if (token) {
-      jwt.verify(token, process.env.JWT_SECRET as string, function(err:any, email:any) {
+      jwt.verify(token, process.env.JWT_SECRET as string, (err:any, email:any) => {
          if (err) {
             console.log(err);
             return res.sendStatus(403);
@@ -22,15 +28,15 @@ function verifyToken(req:any, res:any, next:any) {
 }
 
 async function pwdHash(pwd:string, salt:string) {
-   return pwd;
+   return bcrypt.hash(pwd, salt);
 }
 
 async function genAuth(pwd:string) {
    const saltRounds  = 10;
    const salt        = await bcrypt.genSalt(saltRounds, 'b');
-   const pwd_hash    = bcrypt.hash(pwd, salt);
+   const pwdHashed    = bcrypt.hash(pwd, salt);
 
-   return { pwd_hash, salt };
+   return { pwdHashed, salt };
 }
 
 export { genToken, verifyToken, pwdHash, genAuth };

@@ -1,10 +1,16 @@
 import { app, prisma } from '../app';
-import express from 'express'
+import { json_req } from '../middleware';
+import express from 'express';
+import * as auth from '../auth';
 
 const router = express.Router();
 
 router.get('/latest/:count', async (req, res) => {
    const count = Math.abs(parseInt(req.params.count, 10));
+   if(isNaN(count)) {
+      res.sendStatus(400);
+      return
+   }
 
    const posts = await prisma.post.findMany({
       take: count,
@@ -32,45 +38,85 @@ router.get('/search/:term', async (req, res) => {
 
 router.get('/id/:id', async (req, res) => {
    const id = parseInt(req.params.id, 10);
+   if(isNaN(id)) {
+      res.sendStatus(400);
+      return
+   }
 
-   const post = await prisma.post.findUnique({
-      where: {
-         id: id
-      }
-   });
-   res.json(post);
+   try {
+      const post = await prisma.post.findUnique({
+         where: {
+            id
+         }
+      });
+      res.json(post);
+   } catch (e) {
+      console.log('db err')
+      res.sendStatus(400)
+      return
+   }
 });
 
-router.post('/new', async (req, res) => {
-   const json = req.body();
+router.post('/new', json_req(['title', 'body']), auth.verifyToken, async (req:any, res) => {
+   const json = req.body;
 
-   const post = await prisma.post.create({
-      data: {
-         authorId: json.authorId,
-         title: json.title,
-         body: json.body,
-         date: json.date
-      }
-   });
-   res.send(post);
+   let author;
+   try {
+      author = await prisma.user.findUnique({ where: { email: req.tokenEmail.email } });
+   } catch (e) {
+      console.log('db err')
+      res.sendStatus(400)
+      return
+   }
+
+   if(author) {
+      const post = await prisma.post.create({
+         data: {
+            authorId: author.id,
+            title: json.title,
+            body: json.body
+         }
+      });
+      res.send(post);
+   }
+   else {
+      res.sendStatus(403);
+   }
 });
 
-router.post('/update/:id', async (req, res) => {
+router.post('/update/:id', json_req(['title', 'body']), async (req:any, res) => {
    const id = parseInt(req.params.id, 10);
-   const json = req.body();
+   if(isNaN(id)) {
+      res.sendStatus(400);
+      return
+   }
+   const json = req.body;
 
-   const post = await prisma.post.update({
-      where: {
-         id: id
-      },
-      data: {
-         authorId: json.authorId,
-         title: json.title,
-         body: json.body,
-         date: json.date
-      }
-   });
-   res.send(post);
+   let author;
+   try {
+      author = await prisma.user.findUnique({ where: { email: req.tokenEmail.email } });
+   } catch (e) {
+      console.log('db err')
+      res.sendStatus(400)
+      return
+   }
+
+   if(author) {
+      const post = await prisma.post.update({
+         where: {
+            id
+         },
+         data: {
+            authorId: author.id,
+            title: json.title,
+            body: json.body,
+         }
+      });
+      res.send(post);
+   }
+   else {
+      res.sendStatus(403);
+   }
 });
 
 export default router;
