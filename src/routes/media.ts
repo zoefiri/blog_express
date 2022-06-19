@@ -46,10 +46,8 @@ router.post('/', auth.verifyToken, multer().fields([{ name: 'media', maxCount: 1
       return;
    }
 
-   console.log('guckin', req.files, media, typeof(req.files.media));
    if (typeof(req.files.media) === 'object') for (const file of req.files.media) {
       if(true){
-         console.log('GUHHH', file.originalname in media, req.files, media, file, file.originalname);
          if(file.originalname in media
             && 'type' in media[file.originalname]
             && ["image", "video", "audio"].includes(media[file.originalname].type)) {
@@ -68,10 +66,10 @@ router.post('/', auth.verifyToken, multer().fields([{ name: 'media', maxCount: 1
                return;
             }
          }
-      }
-      else {
-         res.sendStatus(400);
-         return;
+         else {
+            res.sendStatus(400);
+            return;
+         }
       }
    }
    res.sendStatus(200);
