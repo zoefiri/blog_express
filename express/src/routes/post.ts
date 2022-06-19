@@ -25,12 +25,20 @@ router.get('/search/:term', async (req, res) => {
    console.log('dbg:', term);
    const posts = await prisma.post.findMany({
       where: {
-         title: {
-            contains: term
-         },
-         body: {
-            contains: term
-         }
+         OR: [
+            {
+               title: {
+                  contains: term,
+                  mode: 'insensitive'
+               }
+            },
+            {
+               body: {
+                  contains: term,
+                  mode: 'insensitive'
+               }
+            }
+         ]
       }
    });
    res.json(posts);
@@ -57,7 +65,8 @@ router.get('/id/:id', async (req, res) => {
    }
 });
 
-router.post('/new', json_req(['title', 'body']), auth.verifyToken, async (req:any, res) => {
+router.post('/new', [json_req(['title', 'body']), auth.verifyToken], async (req:any, res:any) => {
+   console.log('uOOHHhh');
    const json = req.body;
 
    let author;
@@ -84,7 +93,7 @@ router.post('/new', json_req(['title', 'body']), auth.verifyToken, async (req:an
    }
 });
 
-router.post('/update/:id', json_req(['title', 'body']), async (req:any, res) => {
+router.post('/update/:id', json_req(['title', 'body']), auth.verifyToken, async (req:any, res) => {
    const id = parseInt(req.params.id, 10);
    if(isNaN(id)) {
       res.sendStatus(400);
@@ -93,12 +102,13 @@ router.post('/update/:id', json_req(['title', 'body']), async (req:any, res) => 
    const json = req.body;
 
    let author;
-   try {
-      author = await prisma.user.findUnique({ where: { email: req.tokenEmail.email } });
-   } catch (e) {
-      console.log('db err')
-      res.sendStatus(400)
-      return
+   let oldPost;
+   author = await prisma.user.findMany({ where: { email: req.tokenEmail.email } });
+   oldPost = await prisma.user.findMany({ where: { id } });
+   if(!author.length || !oldPost.length) {
+      console.log('db err');
+      res.sendStatus(400);
+      return;
    }
 
    if(author) {
@@ -107,7 +117,7 @@ router.post('/update/:id', json_req(['title', 'body']), async (req:any, res) => 
             id
          },
          data: {
-            authorId: author.id,
+            authorId: author[0].id,
             title: json.title,
             body: json.body,
          }

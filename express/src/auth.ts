@@ -14,6 +14,7 @@ async function verifyToken(req:any, res:any, next:any) {
    const token = tokenHeader && tokenHeader.split(' ')[1];
 
    const json = req.body;
+   // console.log('verifying', json, req.headers);
 
    if (token) {
       jwt.verify(token, process.env.JWT_SECRET as string, (err:any, email:any) => {
@@ -23,8 +24,10 @@ async function verifyToken(req:any, res:any, next:any) {
          }
          req.tokenEmail = email;
          next();
+         return;
       });
    }
+   else return res.sendStatus(401)
 }
 
 async function pwdHash(pwd:string, salt:string) {
